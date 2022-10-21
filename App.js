@@ -39,67 +39,56 @@ const App = () => {
     }
   };
 
-  const getLocation = () => {
-    const result = requestLocationPermission();
-    result.then(res => {
-      console.log('res is:', res);
-      if (res) {
-        Geolocation.getCurrentPosition(
-          position => {
-            console.log(position);
-            setLocation(position);
-          },
-          error => {
-            console.log(error.code, error.message);
-            setLocation(false);
-          },
-          {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
-        );
-      }
-    });
-    console.log(location);
+  const makeWatch = () => {
+    Geolocation.watchPosition(
+      async position => {
+        console.log(position);
+        setLocation(position);
+        const idDevice = await DeviceInfo.getUniqueId();
+        try {
+          const response = await fetch('http://beaa-190-250-68-157.ngrok.io/api/location', {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              user: idDevice,
+              geolocation: {
+                latitude: `${position.coords.latitude}`,
+                longitude: `${position.coords.longitude}`
+              }
+            })
+          });
+          const json = await response.json();
+          console.log('response: ', json)
+        } catch (error) {
+          console.error(error);
+        }
+      },
+      error => {
+        console.log(error.code, error.message);
+        setLocation(false);
+      },
+      {enableHighAccuracy: true, interval: 5000, distanceFilter: 5},
+    );
   };
 
-  const watchLocation = () => {
-    const result = requestLocationPermission();
-    result.then(res => {
-      console.log('res is:', res);
-      if (res) {
-        Geolocation.watchPosition(
-          async position => {
-            console.log(position);
-            setLocation(position);
-            const idDevice = await DeviceInfo.getUniqueId();
-            try {
-              const response = await fetch('http://beaa-190-250-68-157.ngrok.io/api/location', {
-                method: 'POST',
-                headers: {
-                  Accept: 'application/json',
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  user: idDevice,
-                  geolocation: {
-                    latitude: `${position.coords.latitude}`,
-                    longitude: `${position.coords.longitude}`
-                  }
-                })
-              });
-              const json = await response.json();
-              console.log('aja: ', json)
-            } catch (error) {
-              console.error(error);
-            }
-          },
-          error => {
-            console.log(error.code, error.message);
-            setLocation(false);
-          },
-          {enableHighAccuracy: true, interval: 5000, distanceFilter: 5},
-        );
-      }
-    });
-    console.log(location);
+  const watchLocation = async () => {
+    const so = await DeviceInfo.getSystemName();
+    if (so === "iOS") {
+      const result = await Geolocation.requestAuthorization("always");
+      if (result === "granted") {
+        makeWatch();
+      } 
+    } else {
+      const result = requestLocationPermission();
+      result.then(res => {
+        if (res) {
+          makeWatch();
+        }
+      });
+    }
   };
 
   useEffect(() => {
